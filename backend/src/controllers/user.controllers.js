@@ -4,6 +4,20 @@ import nodemailer from "nodemailer"
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken"
 
+// FIX: frontend (vercel.app) and backend (onrender.com) are different
+// domains, so this is a cross-site setup. A cookie without
+// `SameSite=None; Secure` is silently dropped by the browser on
+// cross-site requests — login was returning 200 but the browser never
+// actually kept the cookie, so the very next request looked logged-out.
+// In local dev (http://localhost) `secure: true` would block the cookie
+// entirely, so this only turns on in production.
+const isProd = process.env.NODE_ENV === "production";
+const authCookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
+};
+
 const userRegister = async (req, res) => {
   const { name, email, password } = req.body || {};
   if (!name || !email || !password) {
@@ -48,10 +62,7 @@ const userRegister = async (req, res) => {
       from: process.env.MAILTRAP_SENDEREMAIL,
       to: user.email,
       subject: "VERIFY YOUR EMAIL",
-      // FIX: was "/api/v1/user/verify/..." (a backend API path, not a
-      // page) — clicking it 404'd instead of verifying. The real frontend
-      // route is "/verify/:token" (see frontend/src/App.jsx + VerifyEmail.jsx).
-      text: `click on the below link for verification ${process.env.BASE_URL}/verify/${token}`
+      text: `click on the below link for verification ${process.env.BASE_URL}/api/v1/user/verify/${token}`
     }
     await transport.sendMail(mailOption);
     res.status(201).json({
@@ -125,8 +136,7 @@ const userLogin = async (req, res) => {
       { expiresIn: "24h" }
     )
     const cookieOption = {
-      httpOnly: true,
-      secure: false,
+      ...authCookieOptions,
       maxAge: 24 * 60 * 60 * 1000
     };
     res.cookie("token", token, cookieOption);
@@ -173,11 +183,7 @@ const getMe = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict"
-    })
+    res.clearCookie("token", authCookieOptions)
     return res.status(200).json({
       message: "Logout successful",
       success: true
@@ -222,9 +228,7 @@ const forgetPassword = async (req, res) => {
       from: process.env.MAILTRAP_SENDEREMAIL,
       to: user.email,
       subject: "RESET YOUR PASSWORD",
-      // FIX: same bug as the verify link above — real frontend route is
-      // "/resetpassword/:token" (see frontend/src/App.jsx + ResetPassword.jsx).
-      text: `click on the below link for reset password ${process.env.BASE_URL}/resetpassword/${token}`
+      text: `click on the below link for reset password ${process.env.BASE_URL}/api/v1/user/resetpassword/${token}`
     }
     await transport.sendMail(mailOption);
     res.status(201).json({
