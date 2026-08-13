@@ -27,12 +27,12 @@ const server = http.createServer(app); // NEW: raw http server so socket.io can 
 app.use(helmet()); // NEW: sets sane security headers
 
 app.use(cors({
-  origin: process.env.BASE_URL,
+  origin: process.env.FRONTEND_URL,
   credentials: true,
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
-})); // for the cors error solution due to front end and backend located in
-// differnt place due to which error came
+})); // FIX: CORS needs the FRONTEND origin (vercel.app), not BASE_URL
+// (BASE_URL is the backend's own URL, used for email verification links)
 
 // NEW: basic rate limiting on all API routes to prevent abuse
 const limiter = rateLimit({
@@ -56,7 +56,7 @@ const port = process.env.PORT || 3000;
 db();
 
 // NEW: socket.io for real-time board updates (live card/list changes across users)
-initSocket(server, process.env.BASE_URL);
+initSocket(server, process.env.FRONTEND_URL);
 
 // NEW: hourly cron job for due-date reminder notifications
 startDueDateReminderJob();
